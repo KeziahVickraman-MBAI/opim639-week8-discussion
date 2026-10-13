@@ -101,6 +101,14 @@ canvas{width:100%;display:block;background:var(--soft);border-radius:6px}
 .reason b{color:var(--navy)}
 .hint{color:var(--muted);font-style:italic}
 .capalt{display:none}.capalt.on{display:block}
+.tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:7px}
+.tabs [data-tab]{font:inherit;background:none;border:0;cursor:pointer;padding:3px 12px 5px;font-size:13px;font-weight:700;
+  color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
+.tabs [data-tab].on{color:var(--navy);border-bottom-color:var(--amber)}
+.tabpane{display:none}.tabpane.on{display:block}
+.tabpane .map{height:222px}
+.tabbed .dyn{min-height:0}
+.tabbed .sides{margin-bottom:6px}
 .reason+.capalt,.reason~.capalt{margin:2px 0 0}
 @media (prefers-reduced-motion:reduce){.map.ready .dot,.map .figc ellipse,.map .figc text{transition:none}}
 
@@ -498,7 +506,7 @@ function zoneWidget(root){
   rng.oninput=e=>{ st.d=+e.target.value; draw(); };
   $$(body,"[data-c]").forEach(b=>b.onclick=()=>{ st.cut=+b.dataset.c; draw(); });
   function chart(){
-    const {g,w,h}=setupCanvas(cv,126), x0=30, x1=w-34, top=8, y0=h-18;
+    const {g,w,h}=setupCanvas(cv,root.closest(".tabbed")?106:126), x0=30, x1=w-34, top=8, y0=h-18;
     const X=d=>x0+(d-D.min)/(D.max-D.min)*(x1-x0), YW=m=>y0-m/20*(y0-top), YE=v=>y0-v/30*(y0-top);
     const other=D.cuts.find(c=>c!==st.cut);
     g.clearRect(0,0,w,h);
@@ -593,6 +601,14 @@ function chatWidget(root){
 
 const WIDGETS={map:mapWidget,chat:chatWidget,tip:tipWidget,zone:zoneWidget};
 document.querySelectorAll("[data-widget]").forEach(el=>WIDGETS[el.dataset.widget](el));
+document.querySelectorAll(".explainer.tabbed").forEach(ex=>{
+  const bs=[...ex.querySelectorAll(".tabs [data-tab]")];
+  bs.forEach(b=>b.onclick=()=>{
+    bs.forEach(x=>{ x.classList.toggle("on",x===b); x.setAttribute("aria-selected",x===b); });
+    ex.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on",p.dataset.tab===b.dataset.tab));
+    dispatchEvent(new Event("resize"));   // redraw canvases that were hidden
+  });
+});
 applyEdits();
 let start=0; try{ start=(parseInt(location.hash.slice(1))||1)-1; }catch(e){}
 go(Math.max(0,start));

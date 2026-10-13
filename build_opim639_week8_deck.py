@@ -212,9 +212,20 @@ CONTENT = [
              "had good technology but never got enough drivers and riders. Platforms subsidise one side, such as "
              "driver bonuses and low introductory prices, to get over the hump."),
         ],
-        explainer_title="Add drivers to one zone",
-        caption="Fixed demand of 120 ride requests an hour in one zone. Each driver can complete at most 2.5 trips "
-                "an hour, at an average fare of $12.",
+        explainer_title="Two views of same-side",
+        tabs=[
+            dict(label="Add drivers to one zone", widget="zone",
+                 caption="Fixed demand of 120 ride requests an hour in one zone. Each driver can complete at most 2.5 "
+                         "trips an hour, at an average fare of $12."),
+            dict(label="Where online marketplaces sit", widget="map", sim="mkt",
+                 toggle=[("fig", "The figure"), ("ours", "Our view, with a sign")],
+                 captions=[
+                     ("fig", "The figure scores size only, so all seven share one “low” circle, on the positive side "
+                             "of zero."),
+                     ("ours", "With a minus sign, five of the seven move left of zero. Only Amazon, and eBay just "
+                              "about, gain from more of the same side."),
+                 ]),
+        ],
         view_kicker="Our conclusion",
         view_lead="Partly correct. Marketplaces belong high on cross-side, but same-side is real and mostly negative: "
                   "suppliers compete and buyers congest at peaks.",
@@ -232,6 +243,9 @@ CONTENT = [
                "the high cross-side effect is what creates the tipping point from the network effects model. Below "
                "the critical mass z′ the market shrinks to zero, which is what happened to SideCar. Lowering prices or "
                "subsidising one side moves that tipping point left and is why marketplaces spend heavily early on. "
+               "Second tab: the figure's seven marketplaces on a same-side axis with a minus sign. Uber, Lyft, "
+               "Grubhub and Tinder move left of zero, Airbnb is mixed, and only Amazon, with eBay near zero, gains "
+               "from more of the same side. One \"low\" circle hides that spread. "
                "Overall verdict for the figure: a useful rough map, not correct in detail."),
     ),
     dict(
@@ -575,7 +589,7 @@ function zoneWidget(root){
   rng.oninput=e=>{ st.d=+e.target.value; draw(); };
   $$(body,"[data-c]").forEach(b=>b.onclick=()=>{ st.cut=+b.dataset.c; draw(); });
   function chart(){
-    const {g,w,h}=setupCanvas(cv,126), x0=30, x1=w-34, top=8, y0=h-18;
+    const {g,w,h}=setupCanvas(cv,root.closest(".tabbed")?106:126), x0=30, x1=w-34, top=8, y0=h-18;
     const X=d=>x0+(d-D.min)/(D.max-D.min)*(x1-x0), YW=m=>y0-m/20*(y0-top), YE=v=>y0-v/30*(y0-top);
     const other=D.cuts.find(c=>c!==st.cut);
     g.clearRect(0,0,w,h);
@@ -772,6 +786,14 @@ canvas{width:100%;display:block;background:var(--soft);border-radius:6px}
 .reason b{color:var(--navy)}
 .hint{color:var(--muted);font-style:italic}
 .capalt{display:none}.capalt.on{display:block}
+.tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:7px}
+.tabs [data-tab]{font:inherit;background:none;border:0;cursor:pointer;padding:3px 12px 5px;font-size:13px;font-weight:700;
+  color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
+.tabs [data-tab].on{color:var(--navy);border-bottom-color:var(--amber)}
+.tabpane{display:none}.tabpane.on{display:block}
+.tabpane .map{height:222px}
+.tabbed .dyn{min-height:0}
+.tabbed .sides{margin-bottom:6px}
 .reason+.capalt,.reason~.capalt{margin:2px 0 0}
 @media (prefers-reduced-motion:reduce){.map.ready .dot,.map .figc ellipse,.map .figc text{transition:none}}
 
@@ -974,6 +996,14 @@ addEventListener("mousemove",wake); addEventListener("keydown",wake); addEventLi
 __ENGINE__
 const WIDGETS={map:mapWidget,chat:chatWidget,tip:tipWidget,zone:zoneWidget};
 document.querySelectorAll("[data-widget]").forEach(el=>WIDGETS[el.dataset.widget](el));
+document.querySelectorAll(".explainer.tabbed").forEach(ex=>{
+  const bs=[...ex.querySelectorAll(".tabs [data-tab]")];
+  bs.forEach(b=>b.onclick=()=>{
+    bs.forEach(x=>{ x.classList.toggle("on",x===b); x.setAttribute("aria-selected",x===b); });
+    ex.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on",p.dataset.tab===b.dataset.tab));
+    dispatchEvent(new Event("resize"));   // redraw canvases that were hidden
+  });
+});
 applyEdits();
 let start=0; try{ start=(parseInt(location.hash.slice(1))||1)-1; }catch(e){}
 go(Math.max(0,start));
@@ -1038,10 +1068,7 @@ def render_view(s: dict) -> str:
             f'{ed(f"{k}.vl", s["view_lead"], "p", "vl")}{ed(f"{k}.vb", s["view_body"], "p", "vb")}</div>')
 
 
-def render_explainer(s: dict) -> str:
-    k = s["key"]
-    head = (f'<div class="exhead"><span class="tag">● INTERACTIVE EXPLAINER</span>'
-            f'{ed(f"{k}.ex", s["explainer_title"], "span", "ex-title")}</div>')
+def explainer_body(k: str, s: dict) -> str:
     if s["widget"] == "map":
         toggle = "".join(f'<button data-v="{v}" aria-pressed="false">{esc(lab)}</button>' for v, lab in s["toggle"])
         caps = "".join(ed(f"{k}.cap{i}", cap, "p", "caption capalt", f' data-v="{v}"')
@@ -1053,8 +1080,24 @@ def render_explainer(s: dict) -> str:
                  f'<p class="reason" aria-live="polite"></p>{caps}')
     else:
         inner = f'{ed(f"{k}.cap", s["caption"], "p", "caption")}<div class="body"></div>'
-    sim = f' data-sim="{s["sim"]}"' if s.get("sim") else ""
-    return f'<div class="explainer" data-widget="{s["widget"]}"{sim}>{head}{inner}</div>'
+    return inner
+
+
+def render_explainer(s: dict) -> str:
+    k = s["key"]
+    head = (f'<div class="exhead"><span class="tag">● INTERACTIVE EXPLAINER</span>'
+            f'{ed(f"{k}.ex", s["explainer_title"], "span", "ex-title")}</div>')
+    sim = lambda t: f' data-sim="{t["sim"]}"' if t.get("sim") else ""
+    if s.get("tabs"):
+        # one tab per view; each pane is its own widget
+        bar = "".join(f'<button role="tab" data-tab="{i}" class="{"on" if i == 0 else ""}" '
+                      f'aria-selected="{"true" if i == 0 else "false"}">{ed(f"{k}.tab{i}", t["label"])}</button>'
+                      for i, t in enumerate(s["tabs"]))
+        panes = "".join(f'<div class="tabpane{" on" if i == 0 else ""}" role="tabpanel" data-tab="{i}" '
+                        f'data-widget="{t["widget"]}"{sim(t)}>{explainer_body(f"{k}.t{i}" if i else k, t)}</div>'
+                        for i, t in enumerate(s["tabs"]))
+        return f'<div class="explainer tabbed">{head}<div class="tabs" role="tablist">{bar}</div>{panes}</div>'
+    return f'<div class="explainer" data-widget="{s["widget"]}"{sim(s)}>{head}{explainer_body(k, s)}</div>'
 
 
 def render_slide(page: int, s: dict) -> str:
