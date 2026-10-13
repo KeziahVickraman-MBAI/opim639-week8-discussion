@@ -214,9 +214,6 @@ CONTENT = [
         ],
         explainer_title="Two views of same-side",
         tabs=[
-            dict(label="Add drivers to one zone", widget="zone",
-                 caption="Fixed demand of 120 ride requests an hour in one zone. Each driver can complete at most 2.5 "
-                         "trips an hour, at an average fare of $12."),
             dict(label="Where online marketplaces sit", widget="map", sim="mkt",
                  toggle=[("fig", "The figure"), ("ours", "Our view, with a sign")],
                  captions=[
@@ -225,6 +222,9 @@ CONTENT = [
                      ("ours", "With a minus sign, five of the seven move left of zero. Only Amazon, and eBay just "
                               "about, gain from more of the same side."),
                  ]),
+            dict(label="Add drivers to one zone", widget="zone",
+                 caption="Fixed demand of 120 ride requests an hour in one zone. Each driver can complete at most 2.5 "
+                         "trips an hour, at an average fare of $12."),
         ],
         view_kicker="Our conclusion",
         view_lead="Partly correct. Marketplaces belong high on cross-side, but same-side is real and mostly negative: "
@@ -243,7 +243,7 @@ CONTENT = [
                "the high cross-side effect is what creates the tipping point from the network effects model. Below "
                "the critical mass z′ the market shrinks to zero, which is what happened to SideCar. Lowering prices or "
                "subsidising one side moves that tipping point left and is why marketplaces spend heavily early on. "
-               "Second tab: the figure's seven marketplaces on a same-side axis with a minus sign. Uber, Lyft, "
+               "First tab: the figure's seven marketplaces on a same-side axis with a minus sign. Uber, Lyft, "
                "Grubhub and Tinder move left of zero, Airbnb is mixed, and only Amazon, with eBay near zero, gains "
                "from more of the same side. One \"low\" circle hides that spread. "
                "Overall verdict for the figure: a useful rough map, not correct in detail."),
