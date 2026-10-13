@@ -1,0 +1,1099 @@
+r"""
+build_opim639_week8_deck.py  -  OPIM639 Week 8 (Group 3) as an interactive slide deck.
+
+    python build_opim639_week8_deck.py          # writes both decks:
+                                                #   opim639_week8_explainer.html    (main deck)
+                                                #   opim639_week8_marketplace.html  (Marketplaces deck)
+    python build_opim639_week8_deck.py --open   # ...and opens it
+
+Three 16:9 slides (1280 x 720, scaled to fit the window, F for full screen):
+
+  1  Title slide            Is the network effects map correct?
+  2  Circle 1: Marketplaces   explainer: "Add drivers to one zone" - fixed demand, a
+                              drivers slider and a 15% / 25% cut; riders gain (cross-side)
+                              while drivers' earnings fall once demand is met (same-side)
+  3  Circle 2: Communications Networks
+                              explainer: "Your contacts, not total users" - a ring of 20
+                              contacts; value comes from contacts on the app, barely from
+                              users worldwide; a second app shared by contacts cuts lock-in
+
+A separate four-slide Marketplaces deck is built from the same template:
+
+  1  Title slide
+  2  Marketplaces 1: cross-side  explainer: "Find the tipping point" - the lecture's
+                              model r(x)f(z) >= p; a price slider and a launch-size slider
+                              show z' and z'' moving, and whether the market grows or dies
+  3  Marketplaces 2: same-side   explainer: "Add drivers to one zone" - fixed demand, a
+                              drivers slider and a 15% / 25% cut; riders gain (cross-side)
+                              while drivers' earnings fall once demand is met (same-side)
+  4  Marketplaces 3: online marketplaces  explainer: the figure's seven marketplaces moved
+                              from its "low" circle onto a same-side axis with a minus sign
+
+Editing the words
+  * Here: change CONTENT (text) or SIM (explainer numbers) below and re-run.
+  * In the browser: press E (or the Edit button) and click any text to change it.
+    Edits are saved in that browser. "Download" saves a copy of the deck with the
+    edits built in. Re-running this script does NOT pick up browser edits, so copy
+    anything you want to keep into CONTENT.
+  * N shows the speaker notes (editable too).
+  * R (or the "Points" button) switches between showing the points all at once and
+    revealing them one by one with → / ▶. The choice is remembered in that browser.
+
+All explainer numbers are illustrative assumptions, not market data. They live in SIM.
+No company logos: companies appear as plain text labels only.
+"""
+
+from __future__ import annotations
+
+import html
+import json
+import sys
+import webbrowser
+from pathlib import Path
+
+HERE = Path(__file__).parent
+OUT = HERE / "opim639_week8_explainer.html"
+MARKET_OUT = HERE / "opim639_week8_marketplace.html"
+esc = html.escape
+
+TITLE = dict(
+    course="OPIM639",
+    subtitle="Week 8 Discussion Assignment",
+    topic="Is the network effects map correct?",
+    answer_lead="A useful rough map, but not correct in detail.",
+    answer_body="It scores network effects by size only, ignoring direction, and groups very different "
+                "business models together.",
+    group="Group 3",
+    members=["Ayumi Liow", "Jin Ong", "Keziah", "Revan"],
+)
+
+FOOTER = "OPIM639 · Week 8 Discussion Assignment · Group 3"
+
+MARKET_TITLE = dict(
+    TITLE,
+    topic="Is the network effects map correct? Marketplaces",
+    answer_lead="Half right.",
+    answer_body="Marketplaces do belong high on cross-side, but the “low” same-side score hides that sellers "
+                "compete and buyers congest.",
+)
+VERDICT_MARK = {"wrong": "✕", "partial": "◐", "right": "✓"}   # shape as well as colour
+
+# ---------------------------------------------------------------------------
+# Explainer assumptions (illustrative)
+# ---------------------------------------------------------------------------
+SIM = {
+    # Marketplaces deck, slide 4: the figure's seven marketplaces, same-side axis WITH a sign (-10 .. +10)
+    "mkt": {
+        "axis": {"x": [-10, 10], "mid": 0, "lo": "Strong negative", "hi": "Strong positive", "midLabel": "0 = no effect",
+                 "label": "Same-side network effect, with a sign →",
+                 "q": ["", "", "Same side helps itself →", "← Same side crowds itself"],
+                 "circle": "Marketplaces (the figure: “low” same-side)", "circleBelow": True},
+        "circle": {"cx": 3.1, "cy": 8.0, "rx": 100, "ry": 46},
+        "points": [
+            {"label": "Amazon", "fig": [0.8, 9.2], "ours": [3, 9.4],
+             "why": "Other shoppers’ reviews and purchases improve search and recommendations. Sellers compete, but buyers gain more."},
+            {"label": "eBay", "fig": [3.4, 9.2], "ours": [0.5, 8.6],
+             "why": "Sellers compete (−), but more buyers make prices and seller ratings more reliable (+). Roughly cancels out."},
+            {"label": "Tinder", "fig": [0.8, 8.4], "ours": [-4.5, 9.6],
+             "why": "Users compete with others like them for the same matches. Cross-side drives the value; same-side mostly crowds."},
+            {"label": "Airbnb", "fig": [3.4, 8.4], "ours": [-2.5, 8.4],
+             "why": "Hosts in one district compete for guests, but more guest reviews help future guests. Mixed, slightly negative."},
+            {"label": "Uber", "fig": [0.8, 7.6], "ours": [-6.5, 8.6],
+             "why": "Drivers compete for the same trips and riders crowd peak hours (surge). Strong cross-side, negative same-side."},
+            {"label": "Lyft", "fig": [3.4, 7.6], "ours": [-7, 7.2],
+             "why": "Same squeeze as Uber, with a smaller network on each side, so its cross-side pull is a little weaker."},
+            {"label": "Grubhub", "fig": [0.8, 6.8], "ours": [-4, 7.4],
+             "why": "Restaurants compete for the same orders, and dinner rushes slow couriers for everyone."},
+        ],
+    },
+    # Marketplaces deck, slide 2: the lecture's tipping point model, r(x) = 1 - x, f(z) = z
+    "tip": {
+        "price": 0.20, "intro": 0.10,          # full price and introductory price
+        "pMin": 0.05, "pMax": 0.24,
+        "z0": 0.20,                            # share of users at launch
+        "shrink": "Launching with {z0} of users is below the tipping point z′ = {z1}: users leave and the "
+                  "market shrinks to zero, as SideCar’s did.",
+        "grow": "{z0} is above the tipping point z′ = {z1}, so each new user attracts more and the market grows "
+                "to z″ = {z2}.",
+        "cut": "The lower price moved z′ left and z″ right.",
+        "none": "At this price nobody would pay, whatever the network size: no market forms.",
+    },
+    # Marketplaces deck, slide 3: one ride-hailing zone
+    "zone": {
+        "demand": 120,      # ride requests per hour, fixed
+        "cap": 2.5,         # most trips one driver can complete per hour
+        "fare": 12,         # average fare, $
+        "waitBase": 2,      # rider wait (min) = waitBase + waitK / drivers
+        "waitK": 150,
+        "min": 10, "max": 100, "def": 40,
+        "cuts": [0.15, 0.25],
+        "below": "Too few drivers: riders wait and some go unserved. Every extra driver helps riders and earns fully.",
+        "above": "Riders gain little more, but each extra driver cuts everyone’s earnings. That is a negative same-side effect.",
+        "highCut": "A higher cut makes the squeeze arrive faster, the Homejoy problem.",
+    },
+    # Slide 3: one person's value from a messaging app
+    "chat": {
+        "contacts": 20,          # your close contacts
+        "defC": 6,
+        "localMax": 90,          # points from having all your contacts on the app
+        "globalMax": 10,         # points from total users worldwide (log scale)
+        "totals": [1, 10, 100, 1000, 2000],      # millions of users worldwide
+        "totalLabels": ["1 million", "10 million", "100 million", "1 billion", "2 billion"],
+        "defT": 2,
+        "secondEvery": 5,        # with "most" on a second app, every 5th contact is NOT on it
+        "criticalAt": 5,         # below this many contacts, the app is not worth opening
+        "low": "Few of your contacts are on it, so it is worth little to you however big it is worldwide. "
+               "Critical mass happens group by group.",
+        "mid": "Your contacts drive the value. Going from 1 million to 2 billion users worldwide adds at most "
+               "10 points; each contact adds 4.5.",
+        "multi": "Most of your contacts are on a second app too, so leaving costs little. That is how a big app "
+                 "like Hangouts can still fade.",
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Slide content (from BRIEF-week7-network-effects.md)
+# ---------------------------------------------------------------------------
+ICONS = {
+    "loop": '<path d="M20 12a8 8 0 01-14 5.3"/><path d="M4 12a8 8 0 0114-5.3"/><path d="M18 3v3.7h-3.7"/><path d="M6 21v-3.7h3.7"/>',
+    "users": '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/>'
+             '<path d="M16 4.5a3.5 3.5 0 010 7"/><path d="M18 14c2.2.6 3.5 2.8 3.5 6"/>',
+    "clock": '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    "minus": '<circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/>',
+    "tip": '<path d="M3 19c6 0 6-14 12-14h6"/><path d="M3 21h18"/><circle cx="9" cy="12" r="1.6" fill="currentColor"/>',
+    "link": '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+    "drop": '<path d="M4 4l16 16"/><circle cx="8" cy="15" r="3"/><path d="M14 5h6v6"/>',
+    "gift": '<rect x="3.5" y="9" width="17" height="11" rx="1.5"/><path d="M12 9v11M3.5 13h17"/>'
+            '<path d="M12 9c-1-3-5-4-5-1.5S12 9 12 9zM12 9c1-3 5-4 5-1.5S12 9 12 9z"/>',
+    "star": '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/>',
+    "balance": '<path d="M12 3v18"/><path d="M7 21h10"/><path d="M4 7h16"/><path d="M4 7l-2.5 6h5L4 7z"/>'
+               '<path d="M20 7l-2.5 6h5L20 7z"/>',
+    "sign": '<path d="M3 12h18"/><path d="M6 8v8M18 8v8"/><path d="M4 5h4M16 5h4M18 3v4"/>',
+    "car": '<path d="M5 16V11l2-5h10l2 5v5"/><path d="M3.5 16h17"/><circle cx="7.5" cy="16.5" r="2"/><circle cx="16.5" cy="16.5" r="2"/>',
+    "heart": '<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0112 7.4 4.3 4.3 0 0119.5 10c0 5.4-7.5 10-7.5 10z"/>',
+    "home": '<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+    "chat": '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+    "pin": '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0113 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    "stack": '<rect x="3" y="6" width="9" height="14" rx="2"/><path d="M15 4h4a2 2 0 012 2v10a2 2 0 01-2 2h-4"/><path d="M6.5 17h2"/>',
+    "store": '<path d="M4 9l1.5-5h13L20 9"/><path d="M4 9a2.7 2.7 0 005.3 0 2.7 2.7 0 005.4 0 2.7 2.7 0 005.3 0"/>'
+             '<path d="M5.5 11.5V20h13v-8.5"/><path d="M10 20v-5h4v5"/>',
+    "cluster": '<circle cx="7" cy="7" r="2.3"/><circle cx="4.5" cy="13" r="2.3"/><circle cx="10" cy="12" r="2.3"/>'
+               '<circle cx="17" cy="15" r="2.3"/><circle cx="19.5" cy="9" r="2.3"/><path d="M6 9l-1 1.8M8.5 9l1 1M7 13h0.6"/>'
+               '<path d="M18.2 11.2l-.6 1.6"/>',
+}
+
+CONTENT = [
+    dict(
+        key="s2",
+        widget="zone",
+        kicker="Circle 1: Marketplaces · the figure places it high cross-side, low same-side",
+        verdict_level="partial",
+        verdict_label="Half right",
+        verdict="Cross-side is high, but same-side is not low, it is often negative",
+        headline="Marketplaces are right on cross-side, but a “low” same-side score hides that sellers compete and "
+                 "buyers congest",
+        points=[
+            ("loop", "Cross-side is correctly high",
+             "Riders want more drivers and drivers want more riders. The lecture’s Uber loop: more drivers, better "
+             "coverage, shorter waits and lower prices, more riders. Airbnb, eBay and Grubhub work the same way."),
+            ("users", "More sellers means more competition",
+             "The lecture’s eBay slide says it directly: more sellers create more competition. More drivers in one "
+             "zone means fewer trips each; more hosts in one district means lower occupancy. That is a negative "
+             "same-side effect, not a missing one."),
+            ("clock", "More buyers at once means congestion",
+             "Many riders at the same time trigger surge pricing and longer waits. A dinner rush slows deliveries. "
+             "Congestion is the lecture’s example of a negative externality."),
+            ("minus", "The chart has no minus sign",
+             "The axes run only from low to high, so a strong negative effect and no effect land in the same place. "
+             "For marketplaces that sign drives fees, pricing and supplier churn: Homejoy’s 25% cut plus competition "
+             "pushed experienced cleaners out."),
+            ("tip", "Cross-side creates a tipping point",
+             "Because each side’s value depends on the other, a marketplace must pass a critical mass first. SideCar "
+             "had good technology but never got enough drivers and riders. Platforms subsidise one side, such as "
+             "driver bonuses and low introductory prices, to get over the hump."),
+        ],
+        explainer_title="Add drivers to one zone",
+        caption="Fixed demand of 120 ride requests an hour in one zone. Each driver can complete at most 2.5 trips "
+                "an hour, at an average fare of $12.",
+        view_kicker="Our conclusion",
+        view_lead="Partly correct. Marketplaces belong high on cross-side, but same-side is real and mostly negative: "
+                  "suppliers compete and buyers congest at peaks.",
+        view_body="A better chart would let the same-side axis go below zero. That is why marketplaces manage supply "
+                  "balance, fees and quality, not just growth.",
+        notes=("Agree with the vertical position first. The lecture's two-sided loop is exactly this circle: more buyers "
+               "attract more sellers, more sellers attract more spending, and the Uber example shows coverage and price "
+               "improving as drivers join. Then challenge the horizontal position. The lecture's own eBay slide marks "
+               "same-side effects on both sides, including a minus sign for sellers: more sellers create more "
+               "competition. Drivers in the same zone compete for the same riders, and hosts in the same district "
+               "compete for the same guests. On the buyer side, peaks create congestion, which the lecture uses as its "
+               "example of a negative externality. The figure's axis only measures size, so it shows these as “low”. "
+               "That matters because the negative side is where marketplaces fail: Homejoy's 25% cut and fierce "
+               "competition pushed good cleaners away, and customers who found a good cleaner went direct. Finally, "
+               "the high cross-side effect is what creates the tipping point from the network effects model. Below "
+               "the critical mass z′ the market shrinks to zero, which is what happened to SideCar. Lowering prices or "
+               "subsidising one side moves that tipping point left and is why marketplaces spend heavily early on. "
+               "Overall verdict for the figure: a useful rough map, not correct in detail."),
+    ),
+    dict(
+        key="s3",
+        widget="chat",
+        kicker="Circle 2: Communications Networks · the figure places it high same-side, low cross-side",
+        verdict_level="right",
+        verdict_label="Mostly right",
+        verdict="Same-side is high, but it is local and easy to share, and cross-side is rising",
+        headline="Messaging apps do belong high on same-side, but the value comes from your own contacts, not "
+                 "the size of the network",
+        points=[
+            ("chat", "High same-side is correct",
+             "A messaging app is worthless alone and more useful with every contact who joins. It is the lecture’s "
+             "positive externality in its purest form: f(z) does almost all the work."),
+            ("pin", "But the effect is local, not global",
+             "I gain when my 30 contacts join, not when a stranger in another country does. Billions of WhatsApp "
+             "users matter little to me if my friends are on LINE or WeChat."),
+            ("stack", "Multi-homing weakens the lock-in",
+             "A second chat app is free and takes minutes to install, so many people use three or four. Hangouts "
+             "had Google’s huge user base behind it and was still shut down."),
+            ("store", "Cross-side is no longer low",
+             "WhatsApp and Messenger now charge businesses to message customers, and Snapchat sells advertisers "
+             "access to its users. Businesses join because users are there: a cross-side effect."),
+            ("cluster", "Critical mass is won group by group",
+             "The tipping point applies to each friend group, team or class, not to a whole country. That is why "
+             "GroupMe spread through teams and classes, and why a whole group can leave together."),
+        ],
+        explainer_title="Your contacts, not total users",
+        caption="You have 20 close contacts. Move the sliders to see where your value from a messaging app "
+                "really comes from.",
+        view_kicker="Our conclusion",
+        view_lead="Mostly correct. Communications networks belong high on same-side and still fairly low on "
+                  "cross-side.",
+        view_body="But the same-side effect is local and multi-homing is cheap, so it protects less than the chart "
+                  "suggests, and a paying business side is growing. A size-only axis misses both.",
+        notes=("This is the circle the figure gets most right, so say so first. Messaging is the cleanest case of "
+               "the lecture's positive externality: each new user raises the value for existing users, and nobody "
+               "pays anybody for it. In the model, f(z) dominates and intrinsic interest r(x) is small, because a "
+               "chat app on its own does almost nothing. Then add two refinements. First, z is not the total number "
+               "of users, it is the number of people I actually talk to. So the effect is strong but local, which is "
+               "why WhatsApp, LINE and WeChat each dominate different countries instead of one app winning "
+               "everywhere. Second, switching and multi-homing are cheap. Homejoy showed in class how easy switching "
+               "hurts a platform; for messaging it means a big network can still lose, as Hangouts did. On the "
+               "vertical axis, the figure was fair when these apps were purely person to person, but WhatsApp and "
+               "Messenger now sell business messaging and Snapchat sells advertising, so a second side is growing. "
+               "Finally, the tipping point from the model happens inside each group: once the core of a class or "
+               "team joins, the rest follow, and lowering the price to zero is what makes that first step easy. "
+               "Verdict: right on direction, but the axis overstates how protective that same-side effect is."),
+    ),
+]
+
+MARKET_CONTENT = [
+    dict(
+        key="m2",
+        widget="tip",
+        kicker="Marketplaces 1 of 3: cross-side · the figure places it high cross-side, low same-side",
+        verdict_level="right",
+        verdict_label="Correct",
+        verdict="Cross-side is high, and it is what creates the tipping point",
+        headline="The figure is right that marketplaces live on cross-side effects, and that is why they must pass "
+                 "a tipping point first",
+        points=[
+            ("loop", "Cross-side is correctly high",
+             "Riders want more drivers and drivers want more riders. The lecture’s Uber loop: more drivers, better "
+             "coverage, shorter waits and lower prices, more riders. Airbnb, eBay and Grubhub work the same way."),
+            ("link", "Each side’s value depends on the other",
+             "A user joins if r(x)·f(z) ≥ p: intrinsic interest times the benefit from the other side. With no "
+             "drivers, f(0) = 0, so nobody pays, however much they want a ride."),
+            ("tip", "That creates a tipping point",
+             "Below the critical mass z′, users leave and the market shrinks to zero. Above it, each new user "
+             "attracts more until the market settles at z″."),
+            ("drop", "SideCar never got over the hump",
+             "SideCar had good technology but never got enough drivers and riders. Riders waited, left for rivals, "
+             "and drivers followed them."),
+            ("gift", "Subsidies move the tipping point",
+             "Driver bonuses and low introductory prices move z′ left, so it is easier to pass, and z″ right, so the "
+             "final market is bigger. That is why marketplaces spend heavily early on."),
+        ],
+        explainer_title="Find the tipping point",
+        caption="The lecture’s model: user x joins if r(x)·f(z) ≥ p, with r(x) = 1 − x and f(z) = z. The curve is "
+                "what the next user will pay once a share z has joined.",
+        view_kicker="Our conclusion",
+        view_lead="Correct on cross-side. Marketplaces belong high on the vertical axis.",
+        view_body="That strength cuts both ways: it is why a marketplace can grow fast once it passes critical mass, "
+                  "and why it dies if it does not. Early subsidies are the price of getting over the hump.",
+        notes=("Agree with the vertical position first. The lecture's two-sided loop is exactly this circle: more "
+               "buyers attract more sellers, more sellers attract more spending, and the Uber example shows coverage "
+               "and price improving as drivers join. Then connect it to the network effects model. A user buys if "
+               "r(x) times f(z) is at least the price. With r(x) = 1 − x and f(z) = z there are three equilibria: zero, "
+               "the unstable tipping point z′ and the stable market z″. Use the explainer: at the full price, launching "
+               "with 20% of users is below z′ and the market collapses, which is the SideCar story. Switch to the "
+               "introductory price: z′ moves left, the same launch is now above it, and the market grows to a bigger "
+               "z″. That is the lecture's argument for free trials and low introductory prices, and why Uber and Grab "
+               "paid driver bonuses and subsidised rides in new cities. So the figure's high cross-side score is "
+               "right, and it explains both the growth and the fragility of marketplaces."),
+    ),
+    dict(
+        key="m3",
+        widget="zone",
+        kicker="Marketplaces 2 of 3: same-side · the figure places it low same-side",
+        verdict_level="wrong",
+        verdict_label="Not correct",
+        verdict="Same-side is not low, it is often negative",
+        headline="A “low” same-side score hides that sellers compete and buyers congest",
+        points=[
+            ("users", "More sellers means more competition",
+             "The lecture’s eBay slide says it directly: more sellers create more competition. More drivers in one "
+             "zone means fewer trips each; more hosts in one district means lower occupancy. That is a negative "
+             "same-side effect, not a missing one."),
+            ("clock", "More buyers at once means congestion",
+             "Many riders at the same time trigger surge pricing and longer waits. A dinner rush slows deliveries. "
+             "Congestion is the lecture’s example of a negative externality."),
+            ("minus", "The chart has no minus sign",
+             "The axes run only from low to high, so a strong negative effect and no effect land in the same place. "
+             "For marketplaces that sign drives fees, pricing and supplier churn: Homejoy’s 25% cut plus competition "
+             "pushed experienced cleaners out."),
+            ("star", "Some same-side effects are positive",
+             "On eBay more buyers make the platform better, and more reviews on Airbnb help other guests choose. "
+             "The sign depends on the side and the moment, which one number cannot show."),
+            ("balance", "So marketplaces manage balance, not just growth",
+             "Surge pricing, zone bonuses, fees and quality checks exist to stop one side crowding itself. Growth "
+             "alone makes the squeeze worse."),
+        ],
+        explainer_title="Add drivers to one zone",
+        caption="Fixed demand of 120 ride requests an hour in one zone. Each driver can complete at most 2.5 trips "
+                "an hour, at an average fare of $12.",
+        view_kicker="Our conclusion",
+        view_lead="Not correct on same-side. It is real and mostly negative: suppliers compete and buyers congest at "
+                  "peaks.",
+        view_body="A better chart would let the same-side axis go below zero. Overall the Marketplaces circle is half "
+                  "right: high cross-side, but not low same-side.",
+        notes=("Now challenge the horizontal position. The lecture's own eBay slide marks same-side effects on both "
+               "sides, including a minus sign for sellers: more sellers create more competition. Drivers in the same "
+               "zone compete for the same riders, and hosts in the same district compete for the same guests. Use the "
+               "explainer: up to about 48 drivers, every extra driver helps riders and earns fully. Past that point "
+               "riders gain little, and each extra driver cuts everyone's earnings. Switch the cut to 25% and earnings "
+               "drop further, which is the Homejoy problem: its 25% cut and fierce competition pushed good cleaners "
+               "away, and customers who found a good cleaner went direct. On the buyer side, peaks create congestion, "
+               "which the lecture uses as its example of a negative externality. Some same-side effects are positive, "
+               "like more buyers and reviews on eBay, so the true sign varies. The figure's axis only measures size, "
+               "so it shows all of this as \"low\". Overall verdict for the Marketplaces circle: half right."),
+    ),
+    dict(
+        key="m4",
+        widget="map",
+        sim="mkt",
+        kicker="Marketplaces 3 of 3: online marketplaces · the figure’s seven companies on a signed axis",
+        verdict_level="partial",
+        verdict_label="Half right",
+        verdict="The circle’s height is right; its spot on same-side differs by business",
+        headline="Give the same-side axis a minus sign and the Marketplaces circle splits apart",
+        points=[
+            ("sign", "The figure scores size, not sign",
+             "A “low” same-side score puts no effect and a strong negative effect in the same place. Our chart runs "
+             "from negative through zero to positive instead."),
+            ("car", "Ride-hailing and delivery sit left of zero",
+             "Uber, Lyft and Grubhub: suppliers compete for the same jobs and buyers crowd the same peak hours. "
+             "More of the same side makes things worse."),
+            ("heart", "Dating apps are crowded on each side",
+             "On Tinder, users compete with others like them for the same matches. The value comes from the other "
+             "side; more people like you mostly adds competition."),
+            ("star", "Reviews pull some to the right",
+             "On Amazon and eBay, every extra buyer adds reviews, ratings and purchase data that help other buyers "
+             "choose. The lecture’s point on lower search costs works on the same side here."),
+            ("home", "Airbnb is mixed",
+             "Hosts in one district compete for the same guests, but more guest reviews help future guests. The sign "
+             "depends on which side and which city."),
+        ],
+        explainer_title="Where we would actually place them",
+        toggle=[("fig", "The figure"), ("ours", "Our view, with a sign")],
+        captions=[
+            ("fig", "The figure scores size only, so all seven share one “low” circle, on the positive side of zero."),
+            ("ours", "With a minus sign, five of the seven move left of zero. Only Amazon, and eBay just about, "
+                     "gain from more of the same side."),
+        ],
+        view_kicker="Our conclusion",
+        view_lead="Half right: the circle’s height is right, its horizontal spot is not.",
+        view_body="On a signed axis the seven spread from clearly negative (Uber, Lyft) to mildly positive (Amazon). "
+                  "One circle hides that the same-side effect depends on the business model.",
+        notes=("This slide pulls the Marketplaces argument together on the figure's own companies. The vertical "
+               "position stays: all seven live on cross-side effects, which is what slide 2 showed with the tipping "
+               "point. The change is the horizontal axis. Instead of low to high, it runs from strong negative "
+               "through zero to strong positive. Click Our view. Ride-hailing and delivery move furthest left: "
+               "drivers and restaurants compete for the same jobs, and riders and diners crowd the same peaks, which "
+               "is the squeeze from slide 3. Tinder moves left too, because users mainly compete with people like "
+               "them. Airbnb is mixed: hosts compete, but guest reviews help other guests. Amazon moves right, because "
+               "reviews, ratings and purchase data from other buyers lower search costs, the same mechanism the "
+               "lecture uses for Yelp. eBay sits near zero, since the lecture's own eBay slide shows a plus for buyers "
+               "and a minus for sellers. Positions are our judgement, not measured data. The point is that one circle "
+               "at “low” hides a spread from clearly negative to mildly positive, so the figure is half right."),
+    ),
+]
+
+
+ENGINE = r"""
+/* ================= helpers ================= */
+const $=(r,s)=>r.querySelector(s), $$=(r,s)=>[...r.querySelectorAll(s)];
+const pct=v=>Math.round(v*100)+"%";
+function setupCanvas(cv,h){
+  const dpr=(window.devicePixelRatio||1)*Math.max(1,SCALE), w=cv.clientWidth||620;
+  cv.width=w*dpr; cv.height=h*dpr; cv.style.height=h+"px";
+  const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); return {g,w,h};
+}
+
+/* ================= slide 2: where we would actually place them ================= */
+function mapWidget(root){
+  const D=SIM[root.dataset.sim], st={v:"fig",sel:null};
+  const A=Object.assign({x:[0,10], mid:5, lo:"Low", hi:"High", label:"Same-side network effect →",
+    q:["Cross-side only","Both","Same-side only"], midLabel:"", circle:"The figure"}, D.axis||{});
+  const L=48,R=626,T=10,B=232, X=u=>L+(u-A.x[0])*(R-L)/(A.x[1]-A.x[0]), Y=u=>B-u*(B-T)/10;
+  const svg=$(root,"svg.map"), fx=X(D.circle.cx), fy=Y(D.circle.cy);
+  svg.innerHTML=`
+    <line class="mid${A.midLabel?" zero":""}" x1="${X(A.mid)}" y1="${T}" x2="${X(A.mid)}" y2="${B}"/><line class="mid" x1="${L}" y1="${Y(5)}" x2="${R}" y2="${Y(5)}"/>
+    <path class="axis" d="M${L} ${T}V${B}H${R}"/>
+    <text class="q" x="${L+8}" y="${T+13}">${A.q[0]}</text>
+    <text class="q" x="${R-6}" y="${T+13}" text-anchor="end">${A.q[1]}</text>
+    <text class="q" x="${R-6}" y="${B-7}" text-anchor="end">${A.q[2]}</text>
+    <text class="q" x="${L+8}" y="${B-7}">${A.q[3]||""}</text>
+    <text class="ax" x="${L}" y="${B+15}">${A.lo}</text><text class="ax" x="${R}" y="${B+15}" text-anchor="end">${A.hi}</text>
+    ${A.midLabel?`<text class="ax" x="${X(A.mid)}" y="${B+15}" text-anchor="middle">${A.midLabel}</text>`:""}
+    <text class="axl" x="${(L+R)/2}" y="${B+31}" text-anchor="middle">${A.label}</text>
+    <text class="ax" x="${L-6}" y="${B}" text-anchor="end">Low</text><text class="ax" x="${L-6}" y="${T+9}" text-anchor="end">High</text>
+    <text class="axl" transform="translate(16 ${(T+B)/2}) rotate(-90)" text-anchor="middle">Cross-side network effect →</text>
+    <g class="figc"><ellipse cx="${fx}" cy="${fy}" rx="${D.circle.rx}" ry="${D.circle.ry}"/>
+      <text x="${fx}" y="${A.circleBelow?fy+D.circle.ry+14:fy-D.circle.ry-6}" text-anchor="middle">${A.circle}</text></g>
+    ${D.points.map((p,i)=>`<g class="dot" data-i="${i}" tabindex="0" role="button" aria-label="${p.label}: ${p.why}">
+      <circle class="hit" r="15"/><circle class="pt" r="6.5"/><text x="10" y="4">${p.label}</text></g>`).join("")}`;
+  const pick=i=>{ st.sel = st.sel===i ? null : i; draw(); };
+  $$(svg,".dot").forEach(g=>{
+    g.addEventListener("click",()=>pick(+g.dataset.i));
+    g.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); e.stopPropagation(); pick(+g.dataset.i); } });
+  });
+  $$(root,"[data-v]").forEach(b=>{ if(b.tagName==="BUTTON") b.onclick=()=>{ st.v=b.dataset.v; draw(); }; });
+  function draw(){
+    $$(root,"button[data-v]").forEach(b=>{ const on=b.dataset.v===st.v; b.classList.toggle("on",on); b.setAttribute("aria-pressed",on); });
+    svg.classList.toggle("ours",st.v==="ours");
+    $$(svg,".dot").forEach(g=>{ const i=+g.dataset.i, [u,w]=D.points[i][st.v];
+      g.style.transform=`translate(${X(u)}px,${Y(w)}px)`; g.classList.toggle("sel",st.sel===i); });
+    $$(root,".capalt").forEach(c=>c.classList.toggle("on",c.dataset.v===st.v));
+    const r=$(root,".reason");
+    if(st.sel==null) r.innerHTML=`<span class="hint">Tap a dot to see why we place it there.</span>`;
+    else { const p=D.points[st.sel]; r.innerHTML=`<b>${p.label}</b> · ${p.why}`; }
+  }
+  draw();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>svg.classList.add("ready")));   // animate moves, not the first paint
+}
+
+/* ================= marketplaces 1: find the tipping point ================= */
+function tipWidget(root){
+  const D=SIM.tip, st={p:D.price, z0:D.z0};
+  const roots=p=>{ const d=1-4*p; if(d<0) return null; const r=Math.sqrt(d); return [(1-r)/2,(1+r)/2]; };
+  const body=$(root,".body");
+  body.innerHTML=`
+    <div class="tipcontrols">
+      <label for="tp">Price</label><div class="rng"><input id="tp" type="range" min="${D.pMin}" max="${D.pMax}" step="0.01"><span class="val pv"></span></div>
+      <div class="variants"><button data-p="${D.price}">Full price</button><button data-p="${D.intro}">Introductory price</button></div>
+      <label for="tz">Users at launch</label><div class="rng"><input id="tz" type="range" min="0.02" max="0.98" step="0.01"><span class="val zv"></span></div><span></span>
+    </div>
+    <canvas></canvas>
+    <div class="legend"><span><i class="sw ln curve"></i>What the next user will pay</span><span><i class="sw ln price"></i>Price</span>
+      <span><i class="sw rz"></i>Market shrinks</span><span><i class="sw gz"></i>Market grows</span></div>
+    <div class="trio">
+      <div class="kpi"><b class="z1"></b><span>tipping point z′</span></div>
+      <div class="kpi"><b class="z2"></b><span>final market z″</span></div>
+      <div class="kpi out"><b class="o"></b><span>from your launch</span></div>
+    </div>
+    <p class="dyn" aria-live="polite"></p>`;
+  const cv=$(body,"canvas"), tp=$(body,"#tp"), tz=$(body,"#tz");
+  tp.oninput=e=>{ st.p=+e.target.value; draw(); };
+  tz.oninput=e=>{ st.z0=+e.target.value; draw(); };
+  $$(body,"[data-p]").forEach(b=>b.onclick=()=>{ st.p=+b.dataset.p; draw(); });
+  function chart(){
+    const {g,w,h}=setupCanvas(cv,150), x0=34, x1=w-12, top=10, y0=h-20, R=roots(st.p);
+    const X=z=>x0+z*(x1-x0), Y=v=>y0-v/0.3*(y0-top);
+    g.clearRect(0,0,w,h);
+    if(R){ g.fillStyle="#fbeaea"; g.fillRect(X(0),top,X(R[0])-X(0),y0-top); g.fillRect(X(R[1]),top,X(1)-X(R[1]),y0-top);
+      g.fillStyle="#e2f1e8"; g.fillRect(X(R[0]),top,X(R[1])-X(R[0]),y0-top); }
+    else { g.fillStyle="#fbeaea"; g.fillRect(x0,top,x1-x0,y0-top); }
+    g.font="10px Calibri,Carlito,sans-serif"; g.fillStyle="#6b7280"; g.textAlign="right"; g.textBaseline="middle";
+    [0,0.1,0.2,0.3].forEach(v=>{ g.strokeStyle="#e5e7eb"; g.lineWidth=1; g.beginPath(); g.moveTo(x0,Y(v)); g.lineTo(x1,Y(v)); g.stroke(); g.fillText(v.toFixed(1),x0-5,Y(v)); });
+    g.strokeStyle="#1f2a44"; g.lineWidth=2.4; g.beginPath();
+    for(let i=0;i<=100;i++){ const z=i/100, y=Y((1-z)*z); i?g.lineTo(X(z),y):g.moveTo(X(z),y); } g.stroke();
+    g.strokeStyle="#e8a33d"; g.lineWidth=2.2; g.beginPath(); g.moveTo(x0,Y(st.p)); g.lineTo(x1,Y(st.p)); g.stroke();
+    g.fillStyle="#9a6b1e"; g.font="bold 10.5px Calibri,Carlito,sans-serif"; g.textAlign="right"; g.textBaseline="bottom";
+    g.fillText("price p = "+st.p.toFixed(2),x1-4,Y(st.p)-3);
+    g.textBaseline="top"; g.textAlign="center";
+    if(R) [[R[0],"z′","#b93a3a"],[R[1],"z″","#2f855a"]].forEach(([z,l,c])=>{ g.fillStyle=c; g.beginPath(); g.arc(X(z),Y(st.p),5,0,7); g.fill();
+      g.setLineDash([3,3]); g.strokeStyle=c; g.lineWidth=1; g.beginPath(); g.moveTo(X(z),Y(st.p)); g.lineTo(X(z),y0); g.stroke(); g.setLineDash([]);
+      g.font="bold 11px Calibri,Carlito,sans-serif"; g.fillText(l,X(z),y0+3); });
+    // launch marker and where it heads
+    const grows=R && st.z0>R[0], end=!R?0:grows?R[1]:0, ay=y0-7;
+    g.strokeStyle=grows?"#2f855a":"#b93a3a"; g.fillStyle=g.strokeStyle; g.lineWidth=2.2;
+    g.beginPath(); g.moveTo(X(st.z0),ay); g.lineTo(X(end),ay); g.stroke();
+    const dir=Math.sign(X(end)-X(st.z0))||1; g.beginPath(); g.moveTo(X(end),ay); g.lineTo(X(end)-dir*7,ay-4); g.lineTo(X(end)-dir*7,ay+4); g.fill();
+    g.beginPath(); g.arc(X(st.z0),ay,5.5,0,7); g.fillStyle="#1f2a44"; g.fill(); g.strokeStyle="#fff"; g.lineWidth=2; g.stroke();
+    g.fillStyle="#6b7280"; g.font="10px Calibri,Carlito,sans-serif"; g.textBaseline="top";
+    g.textAlign="left"; g.fillText("0%",x0,y0+3); g.textAlign="right"; g.fillText("100% of users joined",x1,y0+3);
+  }
+  function draw(){
+    const R=roots(st.p), grows=R && st.z0>R[0];
+    tp.value=st.p; tz.value=st.z0;
+    $(body,".pv").textContent=st.p.toFixed(2); $(body,".zv").textContent=pct(st.z0);
+    $$(body,"[data-p]").forEach(b=>{ const on=Math.abs(+b.dataset.p-st.p)<1e-9; b.classList.toggle("on",on); b.setAttribute("aria-pressed",on); });
+    $(body,".z1").textContent=R?pct(R[0]):"none"; $(body,".z2").textContent=R?pct(R[1]):"none";
+    $(body,".o").textContent=grows?"grows to "+pct(R[1]):"shrinks to 0";
+    $(body,".out").classList.toggle("good",!!grows); $(body,".out").classList.toggle("bad",!grows);
+    const fill=t=>t.replace("{z0}",pct(st.z0)).replace("{z1}",R?pct(R[0]):"").replace("{z2}",R?pct(R[1]):"");
+    $(body,".dyn").textContent=!R?D.none:fill(grows?D.grow:D.shrink)+(st.p<D.price-1e-9?" "+D.cut:"");
+    chart();
+  }
+  draw();
+  addEventListener("resize",chart);
+}
+
+/* ================= marketplaces 2: add drivers to one zone ================= */
+function zoneWidget(root){
+  const D=SIM.zone, st={d:D.def,cut:D.cuts[0]}, kink=D.demand/D.cap;
+  const usd=v=>"$"+v.toFixed(2);
+  const calc=(d,cut)=>{ const trips=Math.min(D.cap,D.demand/d);
+    return {trips, earn:trips*D.fare*(1-cut), wait:D.waitBase+D.waitK/d, served:Math.min(1,D.cap*d/D.demand)}; };
+  const body=$(root,".body");
+  body.innerHTML=`
+    <div class="controls">
+      <label for="drv">Drivers online</label><div class="rng"><input id="drv" type="range" min="${D.min}" max="${D.max}" step="1" value="${st.d}"><span class="val"></span></div>
+      <label>Platform cut</label><div class="variants">${D.cuts.map(c=>`<button data-c="${c}">${pct(c)}</button>`).join("")}</div>
+    </div>
+    <div class="sides">
+      <div class="side rid"><h4>Riders · cross-side benefit</h4><div class="pair">
+        <div class="kpi"><b class="wait"></b><span>average wait for a ride</span></div>
+        <div class="kpi"><b class="served"></b><span>of requests served</span></div></div></div>
+      <div class="side drv"><h4>Drivers · same-side cost</h4><div class="pair">
+        <div class="kpi"><b class="trips"></b><span>trips per driver per hour</span></div>
+        <div class="kpi"><b class="earn"></b><span>earnings per hour</span></div></div></div>
+    </div>
+    <canvas></canvas>
+    <div class="legend"><span><i class="sw ln wait"></i>Rider wait, min (left)</span><span><i class="sw ln earn"></i>Driver earnings, $/hr (right)</span>
+      <span><i class="sw ln alt"></i>Earnings at the other cut</span><span><i class="sw sq"></i>Demand already met</span></div>
+    <p class="dyn" aria-live="polite"></p>`;
+  const cv=$(body,"canvas"), rng=$(body,"#drv");
+  rng.oninput=e=>{ st.d=+e.target.value; draw(); };
+  $$(body,"[data-c]").forEach(b=>b.onclick=()=>{ st.cut=+b.dataset.c; draw(); });
+  function chart(){
+    const {g,w,h}=setupCanvas(cv,126), x0=30, x1=w-34, top=8, y0=h-18;
+    const X=d=>x0+(d-D.min)/(D.max-D.min)*(x1-x0), YW=m=>y0-m/20*(y0-top), YE=v=>y0-v/30*(y0-top);
+    const other=D.cuts.find(c=>c!==st.cut);
+    g.clearRect(0,0,w,h);
+    g.fillStyle="#fbeaea"; g.fillRect(X(kink),top,x1-X(kink),y0-top);
+    g.font="10px Calibri,Carlito,sans-serif"; g.textBaseline="middle";
+    [0,10,20].forEach((m,i)=>{ const y=YW(m);
+      g.strokeStyle="#e5e7eb"; g.lineWidth=1; g.beginPath(); g.moveTo(x0,y); g.lineTo(x1,y); g.stroke();
+      g.fillStyle="#2563eb"; g.textAlign="right"; g.fillText(m,x0-5,y);
+      g.fillStyle="#9a6b1e"; g.textAlign="left"; g.fillText("$"+[0,15,30][i],x1+5,y); });
+    g.strokeStyle="#b93a3a"; g.setLineDash([3,3]); g.beginPath(); g.moveTo(X(kink),top); g.lineTo(X(kink),y0); g.stroke(); g.setLineDash([]);
+    g.fillStyle="#b93a3a"; g.font="bold 10px Calibri,Carlito,sans-serif"; g.textAlign="left"; g.textBaseline="top";
+    g.fillText(`${Math.round(kink)} drivers: demand met. Beyond this, drivers split the same trips`,X(kink)+5,top+2);
+    const line=(f,col,lw,dash)=>{ g.strokeStyle=col; g.lineWidth=lw; g.setLineDash(dash||[]); g.beginPath();
+      for(let d=D.min; d<=D.max; d++){ const y=f(d); d===D.min?g.moveTo(X(d),y):g.lineTo(X(d),y); } g.stroke(); g.setLineDash([]); };
+    line(d=>YE(calc(d,other).earn),"rgba(214,138,31,.55)",1.5,[4,3]);
+    line(d=>YW(calc(d,st.cut).wait),"#2563eb",2.2);
+    line(d=>YE(calc(d,st.cut).earn),"#d68a1f",2.6);
+    const cx=X(st.d), r=calc(st.d,st.cut);
+    g.strokeStyle="#1f2a44"; g.lineWidth=1.5; g.beginPath(); g.moveTo(cx,top); g.lineTo(cx,y0); g.stroke();
+    [[YW(r.wait),"#2563eb"],[YE(r.earn),"#d68a1f"]].forEach(([y,c])=>{ g.fillStyle=c; g.strokeStyle="#fff"; g.lineWidth=2;
+      g.beginPath(); g.arc(cx,y,4.5,0,7); g.fill(); g.stroke(); });
+    g.fillStyle="#6b7280"; g.font="10px Calibri,Carlito,sans-serif"; g.textAlign="center"; g.textBaseline="top";
+    [10,40,70,100].forEach(d=>g.fillText(d,X(d),y0+4));
+    g.fillText("drivers online",(X(40)+X(70))/2,y0+4);
+  }
+  function draw(){
+    const r=calc(st.d,st.cut), over=st.d>=kink;
+    rng.value=st.d; $(body,".val").textContent=st.d+" drivers";
+    $$(body,"[data-c]").forEach(b=>{ const on=+b.dataset.c===st.cut; b.classList.toggle("on",on); b.setAttribute("aria-pressed",on); });
+    $(body,".wait").textContent=r.wait.toFixed(1)+" min";
+    $(body,".served").textContent=pct(r.served);
+    $(body,".trips").textContent=r.trips.toFixed(2);
+    $(body,".earn").textContent=usd(r.earn);
+    $(body,".drv").classList.toggle("bad",st.d>kink);
+    $(body,".dyn").textContent=(over?D.above:D.below)+(st.cut>D.cuts[0]?" "+D.highCut:"");
+    chart();
+  }
+  draw();
+  addEventListener("resize",chart);
+}
+
+/* ================= slide 3: your contacts, not total users ================= */
+function chatWidget(root){
+  const D=SIM.chat, st={c:D.defC, t:D.defT, multi:false}, N=D.contacts;
+  const onSecond=i=>st.multi && i%D.secondEvery!==D.secondEvery-1;
+  const body=$(root,".body");
+  const ang=i=>-Math.PI/2+i*2*Math.PI/N, P=(i,r)=>[93+r*Math.cos(ang(i)), 93+r*Math.sin(ang(i))];
+  body.innerHTML=`
+    <div class="chatgrid">
+      <svg class="ring" viewBox="0 0 186 186" role="img" aria-label="Your 20 contacts; filled dots are on the app">
+        ${Array.from({length:N},(_,i)=>{const [x,y]=P(i,72);return `<line class="link" data-i="${i}" x1="93" y1="93" x2="${x}" y2="${y}"/>`;}).join("")}
+        <circle class="you" cx="93" cy="93" r="17"/><text class="youl" x="93" y="97" text-anchor="middle">You</text>
+        ${Array.from({length:N},(_,i)=>{const [x,y]=P(i,72);return `<circle class="c2" data-i="${i}" cx="${x}" cy="${y}" r="10.5"/><circle class="c" data-i="${i}" cx="${x}" cy="${y}" r="6.5"/>`;}).join("")}
+      </svg>
+      <div>
+        <div class="controls">
+          <label for="cc">Your contacts on the app</label><div class="rng"><input id="cc" type="range" min="0" max="${N}" step="1"><span class="val cv"></span></div>
+          <label for="tu">Total users worldwide</label><div class="rng"><input id="tu" type="range" min="0" max="${D.totals.length-1}" step="1"><span class="val tv"></span></div>
+          <label>Contacts also on a second app</label><div class="variants"><button data-m="0">None</button><button data-m="1">Most</button></div>
+        </div>
+        <div class="trio">
+          <div class="kpi"><b class="v"></b><span>value to you, out of 100</span></div>
+          <div class="kpi"><b class="g"></b><span>of it from users worldwide</span></div>
+          <div class="kpi lock"><b class="l"></b><span>lost if you switch apps</span></div>
+        </div>
+        <div class="legend"><span><i class="sw c"></i>Contact on this app</span><span><i class="sw c2"></i>Also on a second app</span></div>
+      </div>
+    </div>
+    <p class="dyn" aria-live="polite"></p>`;
+  const cc=$(body,"#cc"), tu=$(body,"#tu");
+  cc.oninput=e=>{ st.c=+e.target.value; draw(); };
+  tu.oninput=e=>{ st.t=+e.target.value; draw(); };
+  $$(body,"[data-m]").forEach(b=>b.onclick=()=>{ st.multi=b.dataset.m==="1"; draw(); });
+  function draw(){
+    cc.value=st.c; tu.value=st.t;
+    $(body,".cv").textContent=`${st.c} of ${N}`; $(body,".tv").textContent=D.totalLabels[st.t];
+    $$(body,"[data-m]").forEach(b=>{ const on=(b.dataset.m==="1")===st.multi; b.classList.toggle("on",on); b.setAttribute("aria-pressed",on); });
+    $$(body,".ring .c").forEach(c=>c.classList.toggle("on",+c.dataset.i<st.c));
+    $$(body,".ring .c2").forEach(c=>c.classList.toggle("on",onSecond(+c.dataset.i)));
+    $$(body,".ring .link").forEach(l=>l.style.opacity= +l.dataset.i<st.c ? 1 : 0);
+    const local=D.localMax*st.c/N, glob=D.globalMax*Math.log10(D.totals[st.t])/Math.log10(D.totals[D.totals.length-1]);
+    let locked=0; for(let i=0;i<st.c;i++) if(!onSecond(i)) locked++;
+    const lost=D.localMax*locked/N;
+    $(body,".v").textContent=Math.round(local+glob);
+    $(body,".g").textContent=Math.round(glob)+" pts";
+    $(body,".l").textContent=Math.round(lost)+" pts";
+    $(body,".lock").classList.toggle("low",lost<D.localMax*0.15);
+    $(body,".dyn").textContent=(st.c<D.criticalAt?D.low:D.mid)+(st.multi?" "+D.multi:"");
+  }
+  draw();
+}
+"""
+
+TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__DOCTITLE__</title>
+<script id="baked-edits" type="application/json">{}</script>
+<style>
+:root{
+  --navy:#1f2a44; --amber:#e8a33d; --amber-soft:#fbe9d0; --amber-ink:#9a6b1e; --ink:#23272f; --body:#374151;
+  --muted:#6b7280; --line:#e5e7eb; --soft:#f3f4f6; --red:#b93a3a; --blue:#2563eb; --green:#2f855a;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#15171c;overflow:hidden;
+  font:15px/1.4 Calibri,Carlito,"Segoe UI",system-ui,sans-serif;color:var(--body)}
+#viewport{position:fixed;inset:0}
+#stage{position:absolute;left:0;top:0;width:1280px;height:720px;transform-origin:0 0;background:#fff;overflow:hidden;
+  box-shadow:0 10px 40px rgba(0,0,0,.45)}
+.slide{position:absolute;inset:0;display:none}
+.slide.on{display:block}
+
+/* ---------- title slide ---------- */
+.title{background:var(--navy);color:#fff}
+.title .ttext{position:absolute;left:96px;top:50%;transform:translateY(-50%);max-width:760px}
+.title .course{margin:0;font-size:24px;font-weight:700;letter-spacing:.14em;color:var(--amber)}
+.title h1{margin:6px 0 0;font-size:56px;line-height:1.1;font-weight:700}
+.title .topic{margin:14px 0 0;font-size:24px;color:#fff}
+.title .answer{margin:12px 0 0;font-size:18px;line-height:1.4;color:#cbd2e0;max-width:680px}
+.title .answer b{color:var(--amber)}
+.title .rule{width:96px;height:4px;background:var(--amber);margin:30px 0 26px}
+.title .group{margin:0 0 8px;font-size:22px;font-weight:700;color:#cbd2e0}
+.title .names{list-style:none;margin:0;padding:0;font-size:26px;line-height:1.45}
+.title .art{position:absolute;right:0;top:0;bottom:0;width:430px;opacity:.95}
+
+/* ---------- content slides ---------- */
+.content{padding:18px 40px 0}
+.kicker{margin:0;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--amber-ink)}
+h2{font-size:27px;line-height:1.14;color:var(--ink);margin:4px 0 4px;max-width:1150px}
+.verdict{display:flex;gap:8px;align-items:baseline;margin:2px 0 0;font-size:15px;color:var(--body)}
+.vtag{flex:none;font-size:11.5px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;border-radius:4px;padding:1px 7px}
+.vtag.wrong{background:#f8e1e1;color:var(--red)}
+.vtag.partial{background:var(--amber-soft);color:var(--amber-ink)}
+.vtag.right{background:#e2f1e8;color:var(--green)}
+.verdict [data-k$=".verdict"]{font-weight:600;color:var(--ink)}
+.grid{display:grid;grid-template-columns:500px 1fr;gap:28px;align-items:start;margin-top:14px}
+.points{display:flex;flex-direction:column;gap:15px}
+.point{display:flex;gap:12px;transition:opacity .35s,transform .35s}
+.point.hid{opacity:0;transform:translateY(6px);pointer-events:none}
+body.editing .point.hid{opacity:1;transform:none;pointer-events:auto}
+@media (prefers-reduced-motion:reduce){.point{transition:none}}
+.point .ico{flex:none;width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center}
+.point .ico svg{width:17px;height:17px}
+.point h3{margin:0 0 3px;font-size:16px;line-height:1.2;color:var(--ink)}
+.point p{margin:0;font-size:13.5px;line-height:1.38}
+
+.explainer{background:#fff;border:1px solid var(--line);border-left:4px solid var(--navy);padding:9px 14px 10px}
+.exhead{display:flex;gap:10px;align-items:center;margin-bottom:7px}
+.tag{flex:none;background:var(--navy);color:#fff;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 10px}
+.ex-title{font-weight:700;letter-spacing:.05em;color:var(--muted);font-size:12px;text-transform:uppercase}
+.caption{margin:0 0 6px;font-size:12.5px;color:var(--body);line-height:1.33}
+.variants{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:6px}
+.variants button{font:inherit;font-size:12.5px;padding:2px 11px;border:1px solid var(--navy);background:#fff;color:var(--navy);border-radius:5px;cursor:pointer}
+.variants button.on{background:var(--navy);color:#fff}
+button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--muted);margin:4px 0 4px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.kpi{background:var(--soft);border-radius:6px;padding:5px 9px}
+.kpi b{display:block;font:700 18px var(--mono);color:var(--ink)}
+.kpi span{font-size:11.5px;line-height:1.25;display:block}
+canvas{width:100%;display:block;background:var(--soft);border-radius:6px}
+.controls{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center;margin:2px 0 8px;font-size:12.5px}
+.controls label{color:var(--ink);font-weight:600;white-space:nowrap}
+.controls .variants{margin:0}
+.rng{display:flex;gap:8px;align-items:center}
+.rng input[type=range]{flex:1;accent-color:var(--amber);height:16px;margin:0;min-width:0}
+.rng .val{font:11.5px var(--mono);min-width:80px;text-align:right;color:var(--ink)}
+
+/* slide 2: the map */
+.map{width:100%;height:auto;display:block;background:var(--soft);border-radius:6px}
+.map .axis{fill:none;stroke:#9ca3af;stroke-width:1.2}
+.map .mid{stroke:#c5cad3;stroke-width:1;stroke-dasharray:5 4}
+.map .mid.zero{stroke:#6b7280;stroke-width:1.4;stroke-dasharray:none}
+.map text{font-family:Calibri,Carlito,"Segoe UI",system-ui,sans-serif}
+.map .q{font-size:10.5px;fill:#9ca3af;font-style:italic}
+.map .ax{font-size:10.5px;fill:var(--muted)}
+.map .axl{font-size:11.5px;font-weight:700;fill:var(--ink)}
+.map .figc ellipse{fill:rgba(232,163,61,.14);stroke:var(--amber);stroke-width:1.6;stroke-dasharray:5 3;transition:opacity .5s}
+.map .figc text{font-size:11px;font-weight:700;fill:var(--amber-ink);transition:opacity .5s}
+.map.ours .figc ellipse{opacity:.45}.map.ours .figc text{opacity:.4}
+.map .dot{cursor:pointer;outline:none}
+.map.ready .dot{transition:transform .75s cubic-bezier(.45,0,.2,1)}
+.map .dot .hit{fill:transparent}
+.map .dot .pt{fill:var(--navy);stroke:#fff;stroke-width:2;transition:fill .2s}
+.map .dot text{font-size:12.5px;font-weight:700;fill:var(--ink);paint-order:stroke;stroke:var(--soft);stroke-width:3px;stroke-linejoin:round}
+.map .dot.sel .pt{fill:var(--amber)}
+.map .dot:hover .pt{fill:var(--amber-ink)}.map .dot.sel:hover .pt{fill:var(--amber)}
+.map .dot:focus-visible .pt{stroke:var(--blue);stroke-width:3}
+.reason{margin:6px 0 2px;font-size:13px;line-height:1.3;min-height:17px;color:var(--ink)}
+.reason b{color:var(--navy)}
+.hint{color:var(--muted);font-style:italic}
+.capalt{display:none}.capalt.on{display:block}
+.reason+.capalt,.reason~.capalt{margin:2px 0 0}
+@media (prefers-reduced-motion:reduce){.map.ready .dot,.map .figc ellipse,.map .figc text{transition:none}}
+
+/* marketplaces: tipping point */
+.tipcontrols{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;margin:2px 0 8px;font-size:12.5px}
+.tipcontrols label{color:var(--ink);font-weight:600;white-space:nowrap}
+.tipcontrols .variants{margin:0}
+.tipcontrols .variants button{font-size:11.5px;padding:1px 8px}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.kpi.good b{color:var(--green)}
+.kpi.bad b{color:var(--red)}
+.sw.gz{background:#e2f1e8;border:1px solid #a9d3b9}
+.sw.rz{background:#fbeaea;border:1px solid #e9b8b8}
+.sw.ln.curve{background:var(--navy)}
+.sw.ln.price{background:var(--amber)}
+
+/* marketplaces: one zone */
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.side h4{margin:0 0 4px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase}
+.side.rid h4{color:var(--blue)}
+.side.drv h4{color:var(--amber-ink)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.side.rid .kpi{border-top:3px solid var(--blue)}
+.side.drv .kpi{border-top:3px solid var(--amber)}
+.side.drv.bad .kpi b{color:var(--red)}
+.sw.ln{height:3px;width:14px;border-radius:2px;vertical-align:3px}
+.sw.ln.wait{background:var(--blue)}
+.sw.ln.earn{background:#d68a1f}
+.sw.ln.alt{background:repeating-linear-gradient(90deg,rgba(214,138,31,.6) 0 4px,transparent 4px 7px)}
+.sw.sq{background:#fbeaea;border:1px solid #e9b8b8}
+
+/* slide 3: contacts ring */
+.chatgrid{display:grid;grid-template-columns:186px 1fr;gap:14px;align-items:center}
+.ring{width:186px;height:186px;display:block;background:var(--soft);border-radius:50%}
+.ring .you{fill:var(--amber)}
+.ring .youl{font:700 11px Calibri,Carlito,sans-serif;fill:#3d2a08}
+.ring .link{stroke:#8fa0c0;stroke-width:1.3}
+.ring .c{fill:#fff;stroke:#c5cad3;stroke-width:1.6;transition:fill .25s,stroke .25s}
+.ring .c.on{fill:var(--navy);stroke:var(--navy)}
+.ring .c2{fill:none;stroke:var(--amber);stroke-width:1.8;opacity:0;transition:opacity .25s}
+.ring .c2.on{opacity:1}
+.chatgrid .controls{grid-template-columns:auto 1fr;margin:0 0 8px}
+.trio .kpi.lock b{color:var(--red)}
+.trio .kpi.lock.low b{color:var(--green)}
+.legend .sw.c{background:var(--navy);border-radius:50%}
+.legend .sw.c2{background:#fff;border:2px solid var(--amber);border-radius:50%}
+@media (prefers-reduced-motion:reduce){.ring .c,.ring .c2{transition:none}}
+.dyn{margin:4px 0 0;font-size:12.5px;line-height:1.33;color:var(--ink);font-weight:600;min-height:34px}
+
+.view{margin-top:10px;background:var(--navy);color:#fff;border-radius:9px;padding:10px 16px 11px;font-size:13px;line-height:1.38}
+.view .vk{margin:0 0 3px;color:var(--amber);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px}
+.view .vl{margin:0 0 4px;font-size:15px;font-weight:700;line-height:1.3}
+.view .vb{margin:0;color:#dfe4ee}
+.foot{position:absolute;left:40px;right:40px;bottom:9px;display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.assume{font-style:italic}
+
+/* ---------- speaker notes ---------- */
+.notes{display:none;position:absolute;left:0;right:0;bottom:0;max-height:46%;overflow:auto;background:rgba(20,22,28,.96);color:#e5e7eb;
+  padding:14px 40px 34px;font-size:14px;line-height:1.5;z-index:3}
+.notes .nk{margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--amber)}
+.notes p{margin:0;white-space:pre-wrap}
+body.shownotes .notes{display:block}
+
+/* ---------- edit mode ---------- */
+body.editing [data-k]{outline:1px dashed rgba(37,99,235,.55);outline-offset:2px;cursor:text;border-radius:2px}
+body.editing [data-k]:hover{background:rgba(37,99,235,.06)}
+body.editing [data-k]:focus{outline:2px solid var(--blue);background:rgba(37,99,235,.08)}
+body.editing .title [data-k]:hover,body.editing .view [data-k]:hover,body.editing .notes [data-k]:hover{background:rgba(255,255,255,.08)}
+[data-k].edited{box-shadow:inset 3px 0 0 -1px transparent}
+
+/* ---------- presenter toolbar (outside the slide) ---------- */
+#toolbar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:4px;align-items:center;
+  background:rgba(20,22,28,.86);color:#fff;border-radius:999px;padding:5px 8px;font-size:13px;transition:opacity .3s;z-index:5;white-space:nowrap}
+#toolbar button{all:unset;cursor:pointer;padding:4px 10px;border-radius:999px}
+#toolbar button:hover,#toolbar button:focus-visible{background:rgba(255,255,255,.18)}
+#toolbar button.on{background:var(--amber);color:#1f2a44;font-weight:700}
+#toolbar .count{min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+#toolbar .sep{width:1px;height:16px;background:rgba(255,255,255,.25);margin:0 4px}
+#toolbar .editonly{display:none}
+body.editing #toolbar .editonly{display:inline-block}
+body.idle:not(.editing) #toolbar{opacity:0}
+#toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;
+  opacity:0;transition:opacity .3s;pointer-events:none;z-index:6}
+#toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){#toolbar,#toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">__SLIDES__</div></div>
+<div id="toolbar" role="toolbar" aria-label="Slide controls">
+  <button id="prev" aria-label="Previous slide">◀</button><span class="count" id="count"></span>
+  <button id="next" aria-label="Next slide">▶</button><span class="sep"></span>
+  <button id="revealb" title="Reveal points one by one or all at once (R)">Points: all</button>
+  <button id="notesb" title="Speaker notes (N)">Notes</button>
+  <button id="editb" title="Edit text (E)">✎ Edit</button>
+  <button id="dl" class="editonly" title="Save a copy with your edits built in">⤓ Download</button>
+  <button id="reset" class="editonly" title="Undo all edits made in this browser">Reset</button>
+  <span class="sep"></span><button id="fs" aria-label="Full screen">⛶ Full screen</button>
+</div>
+<div id="toast" role="status"></div>
+<script>
+const PRISTINE = "<!doctype html>\n" + document.documentElement.outerHTML;
+const SIM = __SIM__;
+const slides=[...document.querySelectorAll(".slide")];
+const stage=document.getElementById("stage");
+let cur=0, SCALE=1;
+
+function fit(){
+  // scale the fixed 1280x720 slide to the largest size that fits, and centre it
+  const W=document.documentElement.clientWidth||innerWidth, H=document.documentElement.clientHeight||innerHeight;
+  SCALE=Math.min(W/1280, H/720);
+  stage.style.transform=`scale(${SCALE})`;
+  stage.style.left=((W-1280*SCALE)/2)+"px";
+  stage.style.top=((H-720*SCALE)/2)+"px";
+}
+addEventListener("resize",fit); document.addEventListener("fullscreenchange",()=>setTimeout(fit,50));
+if(window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
+fit();
+
+/* ---------- points: reveal one by one or all at once (global, remembered in this browser) ---------- */
+const REVEAL="opim639-week8-reveal";
+let stepMode=false, shown=0;
+try{ stepMode=localStorage.getItem(REVEAL)==="step"; }catch(e){}
+const pts=()=>[...slides[cur].querySelectorAll(".point")];
+function paint(){
+  pts().forEach((p,i)=>p.classList.toggle("hid", stepMode && i>=shown));
+  const n=pts().length;
+  document.getElementById("count").textContent=`${cur+1} / ${slides.length}`+(stepMode&&n?` · ${shown}/${n}`:"");
+  const b=document.getElementById("revealb");
+  b.textContent= stepMode ? "Points: one by one" : "Points: all"; b.classList.toggle("on",stepMode);
+}
+function go(i,back){
+  cur=Math.max(0,Math.min(slides.length-1,i));
+  slides.forEach((s,k)=>s.classList.toggle("on",k===cur));
+  shown = back ? pts().length : 0;
+  paint();
+  try{ history.replaceState(null,"","#"+(cur+1)); }catch(e){}   // sandboxed previews (about:srcdoc) block this
+  dispatchEvent(new Event("resize"));
+}
+const next=()=>{ if(stepMode && shown<pts().length){ shown++; paint(); } else if(cur<slides.length-1) go(cur+1); };
+const prev=()=>{ if(stepMode && shown>0){ shown--; paint(); } else if(cur>0) go(cur-1,true); };
+document.getElementById("next").onclick=next;
+document.getElementById("prev").onclick=prev;
+document.getElementById("revealb").onclick=()=>{
+  stepMode=!stepMode; shown=0;
+  try{ localStorage.setItem(REVEAL, stepMode?"step":"all"); }catch(e){}
+  paint(); toast(stepMode?"Points appear one by one: press → or ▶ to reveal the next":"All points shown at once");
+};
+const toggleFS=()=>{ try{ const p=document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.(); p&&p.catch&&p.catch(()=>{}); }catch(e){} };
+document.getElementById("fs").onclick=toggleFS;
+if(!document.fullscreenEnabled) document.getElementById("fs").style.display="none";   // not allowed in embedded previews
+
+/* ---------- editing: click any text in edit mode; saved per browser, Download bakes it in ---------- */
+const STORE="__STORE__";
+const toast=m=>{const t=document.getElementById("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove("on"),2200);};
+let edits={};
+try{ edits=JSON.parse(document.getElementById("baked-edits").textContent||"{}"); }catch(e){}
+try{ Object.assign(edits, JSON.parse(localStorage.getItem(STORE)||"{}")); }catch(e){}
+function applyEdits(){ document.querySelectorAll("[data-k]").forEach(el=>{ if(edits[el.dataset.k]!=null) el.textContent=edits[el.dataset.k]; }); }
+function saveEdits(){ try{ localStorage.setItem(STORE, JSON.stringify(edits)); }catch(e){} }
+function setEditing(on){
+  document.body.classList.toggle("editing",on);
+  document.getElementById("editb").classList.toggle("on",on);
+  document.querySelectorAll("[data-k]").forEach(el=>{ if(on) el.setAttribute("contenteditable","true"); else el.removeAttribute("contenteditable"); });
+  if(!on && document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  toast(on?"Edit mode: click any text to change it":"Edits saved in this browser");
+}
+document.getElementById("editb").onclick=()=>setEditing(!document.body.classList.contains("editing"));
+document.addEventListener("input",e=>{ const el=e.target.closest&&e.target.closest("[data-k]"); if(!el) return; edits[el.dataset.k]=el.innerText.replace(/\n+$/,""); saveEdits(); });
+document.addEventListener("paste",e=>{ if(!e.target.closest||!e.target.closest("[data-k]")) return; e.preventDefault();
+  document.execCommand("insertText",false,(e.clipboardData||window.clipboardData).getData("text/plain")); });
+document.addEventListener("keydown",e=>{ const el=e.target.closest&&e.target.closest("[data-k]");
+  if(el && e.key==="Enter" && !el.closest(".notes")){ e.preventDefault(); el.blur(); }
+  if(el && e.key==="Escape") el.blur(); }, true);
+document.getElementById("dl").onclick=()=>{
+  const json=JSON.stringify(edits).replace(/</g,"\\u003c");
+  const out=PRISTINE.replace(/(<script id="baked-edits" type="application\/json">)[\s\S]*?(<\/script>)/, (m,a,b)=>a+json+b);
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([out],{type:"text/html"}));
+  a.download="__DLNAME__"; document.body.appendChild(a); a.click(); a.remove();
+  toast("Downloaded a copy with your edits built in");
+};
+document.getElementById("reset").onclick=()=>{ if(!confirm("Undo every edit made in this browser?")) return;
+  try{ localStorage.removeItem(STORE); }catch(e){} location.reload(); };
+document.getElementById("notesb").onclick=()=>{ document.body.classList.toggle("shownotes"); document.getElementById("notesb").classList.toggle("on"); };
+
+document.addEventListener("keydown",e=>{
+  if(e.target.isContentEditable) return;
+  if(e.target.tagName==="INPUT" && ["ArrowLeft","ArrowRight"].includes(e.key)) return;
+  if(["ArrowRight","PageDown"," "].includes(e.key) && e.target.tagName!=="BUTTON"){e.preventDefault();next();}
+  else if(["ArrowLeft","PageUp"].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==="Home")go(0); else if(e.key==="End")go(slides.length-1);
+  else if((e.key==="f"||e.key==="F") && document.fullscreenEnabled)toggleFS();
+  else if(e.key==="e"||e.key==="E") document.getElementById("editb").click();
+  else if(e.key==="n"||e.key==="N") document.getElementById("notesb").click();
+  else if(e.key==="r"||e.key==="R") document.getElementById("revealb").click();
+});
+let idle; const wake=()=>{document.body.classList.remove("idle");clearTimeout(idle);idle=setTimeout(()=>document.body.classList.add("idle"),2500);};
+addEventListener("mousemove",wake); addEventListener("keydown",wake); addEventListener("touchstart",wake,{passive:true}); wake();
+
+__ENGINE__
+const WIDGETS={map:mapWidget,chat:chatWidget,tip:tipWidget,zone:zoneWidget};
+document.querySelectorAll("[data-widget]").forEach(el=>WIDGETS[el.dataset.widget](el));
+applyEdits();
+let start=0; try{ start=(parseInt(location.hash.slice(1))||1)-1; }catch(e){}
+go(Math.max(0,start));
+</script>
+</body>
+</html>
+"""
+
+
+def icon(name: str) -> str:
+    return (f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+            f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ICONS[name]}</svg>')
+
+
+def ed(key: str, text: str, tag: str = "span", cls: str = "", attrs: str = "") -> str:
+    """An element whose text can be changed in the browser's edit mode."""
+    c = f' class="{cls}"' if cls else ""
+    return f'<{tag}{c}{attrs} data-k="{key}">{esc(text)}</{tag}>'
+
+
+def render_title(t: dict) -> str:
+    names = "".join(ed(f"t.m{i}", m, "li") for i, m in enumerate(t["members"]))
+    # a quiet line drawing: a small network on the figure's dashed 2x2, no logos
+    nodes = [(110, 560, 7), (175, 470, 9), (95, 390, 6), (250, 410, 7), (330, 300, 10), (220, 250, 7),
+             (360, 170, 7), (290, 120, 6), (150, 180, 6), (380, 470, 6)]
+    edges = [(0, 1), (1, 2), (1, 3), (3, 4), (3, 5), (5, 4), (4, 6), (6, 7), (5, 8), (4, 9), (3, 9), (2, 5), (7, 5)]
+    lines = "".join(f'<path d="M{nodes[a][0]} {nodes[a][1]}L{nodes[b][0]} {nodes[b][1]}"/>' for a, b in edges)
+    dots = "".join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{"#e8a33d" if i in (1, 4) else "#1f2a44"}" '
+                   f'stroke="{"#e8a33d" if i in (1, 4) else "#cbd2e0"}"/>' for i, (x, y, r) in enumerate(nodes))
+    art = f"""<svg class="art" viewBox="0 0 430 720" fill="none" aria-hidden="true">
+      <g stroke="#3a4766" stroke-width="2" stroke-dasharray="4 8"><path d="M60 660V60"/><path d="M60 660H410"/>
+        <path d="M235 660V60" opacity=".6"/><path d="M60 360H410" opacity=".6"/></g>
+      <g stroke="#8fa0c0" stroke-width="2">{lines}</g>
+      <g stroke-width="2.5">{dots}</g>
+    </svg>"""
+    return f"""
+<section class="slide title" aria-label="Title">
+  <div class="ttext">
+    {ed("t.course", t['course'], "p", "course")}
+    {ed("t.subtitle", t['subtitle'], "h1")}
+    {ed("t.topic", t['topic'], "p", "topic")}
+    <p class="answer">{ed("t.a0", t['answer_lead'], "b")} {ed("t.a1", t['answer_body'])}</p>
+    <div class="rule"></div>
+    {ed("t.group", t['group'], "p", "group")}
+    <ul class="names">{names}</ul>
+  </div>
+  {art}
+</section>"""
+
+
+def render_points(s: dict) -> str:
+    k = s["key"]
+    return "".join(
+        f'<div class="point"><span class="ico">{icon(ic)}</span><div>'
+        f'{ed(f"{k}.p{i}.t", t, "h3")}{ed(f"{k}.p{i}.b", b, "p")}</div></div>'
+        for i, (ic, t, b) in enumerate(s["points"]))
+
+
+def render_view(s: dict) -> str:
+    k = s["key"]
+    return (f'<div class="view">{ed(f"{k}.vk", s["view_kicker"], "p", "vk")}'
+            f'{ed(f"{k}.vl", s["view_lead"], "p", "vl")}{ed(f"{k}.vb", s["view_body"], "p", "vb")}</div>')
+
+
+def render_explainer(s: dict) -> str:
+    k = s["key"]
+    head = (f'<div class="exhead"><span class="tag">● INTERACTIVE EXPLAINER</span>'
+            f'{ed(f"{k}.ex", s["explainer_title"], "span", "ex-title")}</div>')
+    if s["widget"] == "map":
+        toggle = "".join(f'<button data-v="{v}" aria-pressed="false">{esc(lab)}</button>' for v, lab in s["toggle"])
+        caps = "".join(ed(f"{k}.cap{i}", cap, "p", "caption capalt", f' data-v="{v}"')
+                       for i, (v, cap) in enumerate(s["captions"]))
+        n = len(SIM[s.get("sim", "map")]["points"])
+        inner = (f'<div class="variants" role="group" aria-label="Which positions to show">{toggle}</div>'
+                 f'<svg class="map" viewBox="0 0 640 268" role="img" '
+                 f'aria-label="Same-side versus cross-side network effects, with {n} companies plotted"></svg>'
+                 f'<p class="reason" aria-live="polite"></p>{caps}')
+    else:
+        inner = f'{ed(f"{k}.cap", s["caption"], "p", "caption")}<div class="body"></div>'
+    sim = f' data-sim="{s["sim"]}"' if s.get("sim") else ""
+    return f'<div class="explainer" data-widget="{s["widget"]}"{sim}>{head}{inner}</div>'
+
+
+def render_slide(page: int, s: dict) -> str:
+    k = s["key"]
+    return f"""
+<section class="slide content {k}" aria-label="Slide {page}">
+  {ed(f"{k}.kicker", s['kicker'], "p", "kicker")}
+  {ed(f"{k}.h", s['headline'], "h2")}
+  <p class="verdict"><span class="vtag {s['verdict_level']}">{VERDICT_MARK[s['verdict_level']]} {ed(f"{k}.vlabel", s['verdict_label'])}</span>{ed(f"{k}.verdict", s['verdict'])}</p>
+  <div class="grid">
+    <div class="points">{render_points(s)}</div>
+    <div class="right">{render_explainer(s)}{render_view(s)}</div>
+  </div>
+  <div class="foot"><span>{FOOTER} · <span class="assume">explainer figures are illustrative assumptions</span></span><span>{page}</span></div>
+  <div class="notes"><p class="nk">SPEAKER NOTES</p>{ed(f"{k}.notes", s['notes'], "p")}</div>
+</section>"""
+
+
+def build(out: Path, title: dict, content: list, doc_title: str, store: str) -> Path:
+    slides = render_title(title) + "".join(render_slide(i + 2, s) for i, s in enumerate(content))
+    page = (TEMPLATE
+            .replace("__SLIDES__", slides)
+            .replace("__SIM__", json.dumps(SIM))
+            .replace("__ENGINE__", ENGINE)
+            .replace("__DOCTITLE__", esc(doc_title))
+            .replace("__STORE__", store)
+            .replace("__DLNAME__", out.stem + "_edited.html"))
+    out.write_text(page, encoding="utf-8")
+    return out
+
+
+if __name__ == "__main__":
+    decks = [
+        (OUT, TITLE, CONTENT, "OPIM639 · Week 8 Discussion Assignment · Group 3", "opim639-week8-v2-edits"),
+        (MARKET_OUT, MARKET_TITLE, MARKET_CONTENT, "OPIM639 · Week 8 · Marketplaces · Group 3",
+         "opim639-week8-marketplace-edits"),
+    ]
+    for out, title, content, doc_title, store in decks:
+        p = build(out, title, content, doc_title, store)
+        print(f"wrote {p} ({len(content) + 1} slides)")
+        if "--open" in sys.argv:
+            webbrowser.open(p.resolve().as_uri())

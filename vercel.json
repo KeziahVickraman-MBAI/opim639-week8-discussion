@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/opim639_week8_explainer.html" },
+    { "source": "/marketplace", "destination": "/opim639_week8_marketplace.html" }
+  ]
+}
